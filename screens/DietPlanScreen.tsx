@@ -23,7 +23,7 @@ const DietPlanScreen = ({ route }) => {
   const [dietPlan, setDietPlan] = useState({});
   const [currentDay, setCurrentDay] = useState("");
   const [selectedMeals, setSelectedMeals] = useState([]);
-  const [mealTime, setMealTime] = useState({ hour: "00", minute: "00" }); // Change state to an object
+  const [mealTime, setMealTime] = useState({ hour: null, minute: null });
   const [isAM, setIsAM] = useState(true); // State to toggle AM/PM
   const [mealWeight, setMealWeight] = useState("");
   const [selectedMeal, setSelectedMeal] = useState(null);
@@ -42,7 +42,7 @@ const DietPlanScreen = ({ route }) => {
     if (option === 'inApp') {
       setCurrentDay(daysOfWeek[0]);
     } else if (option === 'noPlan') {
-      navigation.navigate("Home");
+      navigation.navigate("Code",{ userId });
     }
   };
 
@@ -55,27 +55,31 @@ const DietPlanScreen = ({ route }) => {
   };
 
   const handleSaveMealDetails = () => {
-    if (!mealTime.hour || !mealTime.minute || !mealWeight.trim()) {
-      alert("Please enter time and weight for the meal.");
-      return;
+    let formattedTime = null;
+    if (mealTime.hour !== null && mealTime.minute !== null) {
+      let { hour, minute } = mealTime;
+      hour = hour.padStart(2, '0');
+      minute = minute.padStart(2, '0');
+      formattedTime = `${hour}:${minute}`;
+      if (!isAM && hour !== "12") {
+        formattedTime = `${(parseInt(hour) + 12).toString().padStart(2, '0')}:${minute}`;
+      } else if (isAM && hour === "12") {
+        formattedTime = `00:${minute}`;
+      }
     }
-
-    let { hour, minute } = mealTime;
-    hour = hour.padStart(2, '0');
-    minute = minute.padStart(2, '0');
-    let formattedTime = `${hour}:${minute}`;
-    if (!isAM && hour !== "12") {
-      formattedTime = `${(parseInt(hour) + 12).toString().padStart(2, '0')}:${minute}`;
-    } else if (isAM && hour === "12") {
-      formattedTime = `00:${minute}`;
-    }
-
+  
     setSelectedMeals((prev) => [
       ...prev,
-      { ...selectedMeal, time: formattedTime, weight: mealWeight, id: Date.now().toString() }
+      { 
+        ...selectedMeal, 
+        time: formattedTime, 
+        weight: mealWeight || null, 
+        id: Date.now().toString() 
+      }
     ]);
+  
     setSelectedMeal(null);
-    setMealTime({ hour: "00", minute: "00" });
+    setMealTime({ hour: null, minute: null }); // Reset to null
     setMealWeight("");
     setIsAM(true); // Reset to AM
     setIsModalVisible(false);
@@ -106,7 +110,7 @@ const DietPlanScreen = ({ route }) => {
         createdAt: new Date(),
       });
       console.log("Plan saved successfully");
-      navigation.navigate("Home"); // Navigate to the next screen after saving
+      navigation.navigate("Code", { userId }); // Navigate to VoucherCodeScreen
     } catch (error) {
       console.error("Error saving plan:", error);
     }
@@ -149,25 +153,40 @@ const DietPlanScreen = ({ route }) => {
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <View style={styles.container}>
         <Text style={styles.title}>Let’s start designing your diet plan</Text>
-
+  
         {selectedOption === 'inApp' && currentDay && !showSummary && (
           <View style={styles.planContainer}>
             <Text style={styles.planTitle}>Design Your Plan for {currentDay}</Text>
+  
             <TouchableOpacity
               style={styles.addMealButton}
               onPress={handleAddMeal}
             >
               <Text style={styles.buttonText}>Add Meal</Text>
             </TouchableOpacity>
+  
+            {/* Table Header */}
+            {selectedMeals.length > 0 && (
+              <View style={styles.tableHeader}>
+                <Text style={styles.tableHeaderText}>Meal</Text>
+                <Text style={styles.tableHeaderText}>Time</Text>
+                <Text style={styles.tableHeaderText}>Weight (g)</Text>
+              </View>
+            )}
+  
+            {/* Display Meals in a Tabular Format */}
             <FlatList
               data={selectedMeals}
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
-                <View style={styles.mealItem}>
-                  <Text style={styles.mealText}>{item.name} at {item.time} ({item.weight}g)</Text>
+                <View style={styles.mealRow}>
+                  <Text style={styles.mealText}>{item.name}</Text>
+                  <Text style={styles.mealDetailText}>{item.time || 'N/A'}</Text>
+                  <Text style={styles.mealDetailText}>{item.weight || 'N/A'}</Text>
                 </View>
               )}
             />
+  
             <TouchableOpacity
               style={styles.saveButton}
               onPress={handleSaveDietDay}
@@ -176,7 +195,7 @@ const DietPlanScreen = ({ route }) => {
             </TouchableOpacity>
           </View>
         )}
-
+  
         {showSummary && (
           <View style={styles.summaryContainer}>
             <Text style={styles.summaryTitle}>Your Diet Plan</Text>
@@ -209,7 +228,7 @@ const DietPlanScreen = ({ route }) => {
             </TouchableOpacity>
           </View>
         )}
-
+  
         {!selectedOption && (
           <View style={styles.optionsContainer}>
             <TouchableOpacity style={styles.optionButton} onPress={() => handleOptionSelect('uploadExcel')}>
@@ -223,7 +242,7 @@ const DietPlanScreen = ({ route }) => {
             </TouchableOpacity>
           </View>
         )}
-
+  
         <Modal
           transparent={true}
           visible={isModalVisible}
@@ -342,6 +361,7 @@ const DietPlanScreen = ({ route }) => {
       </View>
     </TouchableWithoutFeedback>
   );
+  
 };
 
 export default DietPlanScreen;
@@ -476,6 +496,38 @@ const styles = StyleSheet.create({
   summaryContainer: {
     width: '100%',
     marginTop: 20,
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: 'white',
+    paddingBottom: 10,
+    marginBottom: 10,
+  },
+  tableHeaderText: {
+    color: 'white',
+    fontSize: 16,
+    flex: 1,
+    textAlign: 'center',
+  },
+  mealRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'gray',
+  },
+  mealText: {
+    color: 'white',
+    fontSize: 16,
+    flex: 1,
+  },
+  mealDetailText: {
+    color: 'white',
+    fontSize: 16,
+    flex: 1,
+    textAlign: 'center',
   },
   summaryTitle: {
     color: 'white',
